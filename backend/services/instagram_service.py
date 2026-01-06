@@ -8,13 +8,16 @@ from backend.utils.oauth import generate_oauth_url
 
 
 class InstagramService:
-    AUTH_URL = "https://api.instagram.com/oauth/authorize"
-    TOKEN_URL = "https://api.instagram.com/oauth/access_token"
+    # Instagram Graph API uses Facebook OAuth endpoints
+    AUTH_URL = "https://www.facebook.com/v18.0/dialog/oauth"
+    TOKEN_URL = "https://graph.facebook.com/v18.0/oauth/access_token"
     API_BASE = "https://graph.instagram.com"
     
+    # Instagram Graph API scopes
     SCOPES = [
-        "user_profile",
-        "user_media",
+        "instagram_basic",
+        "instagram_content_publish",
+        "pages_read_engagement",  # Required for Instagram Graph API
     ]
     
     @staticmethod
@@ -30,11 +33,11 @@ class InstagramService:
     
     @staticmethod
     async def exchange_code(code: str) -> Dict[str, Any]:
-        """Exchange authorization code for access token"""
+        """Exchange authorization code for access token using Facebook OAuth"""
         async with httpx.AsyncClient() as client:
-            response = await client.post(
+            response = await client.get(
                 InstagramService.TOKEN_URL,
-                data={
+                params={
                     "client_id": settings.INSTAGRAM_APP_ID,
                     "client_secret": settings.INSTAGRAM_APP_SECRET,
                     "grant_type": "authorization_code",

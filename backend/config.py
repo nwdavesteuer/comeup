@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     INSTAGRAM_APP_ID: str = ""
     INSTAGRAM_APP_SECRET: str = ""
     INSTAGRAM_REDIRECT_URI: str = "http://localhost:8000/api/callback/instagram"
+    INSTAGRAM_WEBHOOK_VERIFY_TOKEN: str = "comeup_instagram_webhook_verify_token_2024"
     
     # TikTok API
     TIKTOK_CLIENT_KEY: str = ""

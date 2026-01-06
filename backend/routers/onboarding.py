@@ -7,6 +7,7 @@ from typing import Optional
 from backend.database import get_db
 from backend.models.artist import Artist
 from backend.models.onboarding import OnboardingResponse
+from backend.models.connection import PlatformConnection
 from backend.schemas.onboarding import (
     OnboardingAnswerRequest,
     OnboardingStatusResponse,
@@ -187,6 +188,31 @@ async def complete_onboarding(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Onboarding incomplete. {progress}/10 questions answered."
+        )
+    
+    # Check for required platform connections
+    spotify_connection = db.query(PlatformConnection).filter(
+        PlatformConnection.artist_id == artist.artist_id,
+        PlatformConnection.platform == "spotify",
+        PlatformConnection.is_active == True
+    ).first()
+    
+    instagram_connection = db.query(PlatformConnection).filter(
+        PlatformConnection.artist_id == artist.artist_id,
+        PlatformConnection.platform == "instagram",
+        PlatformConnection.is_active == True
+    ).first()
+    
+    if not spotify_connection:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Spotify account must be connected to complete onboarding. Please connect your Spotify account first."
+        )
+    
+    if not instagram_connection:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Instagram account must be connected to complete onboarding. Please connect your Instagram account first."
         )
     
     onboarding.is_complete = True

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models.artist import Artist
 from backend.models.onboarding import OnboardingResponse
+from backend.models.connection import PlatformConnection
 from backend.schemas.content_schedule import (
     ContentScheduleResponse,
     ContentScheduleItem,
@@ -32,6 +33,31 @@ async def get_schedule_preview(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Onboarding must be completed first"
+        )
+    
+    # Check for required platform connections
+    spotify_connection = db.query(PlatformConnection).filter(
+        PlatformConnection.artist_id == artist.artist_id,
+        PlatformConnection.platform == "spotify",
+        PlatformConnection.is_active == True
+    ).first()
+    
+    instagram_connection = db.query(PlatformConnection).filter(
+        PlatformConnection.artist_id == artist.artist_id,
+        PlatformConnection.platform == "instagram",
+        PlatformConnection.is_active == True
+    ).first()
+    
+    if not spotify_connection:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Spotify account must be connected to generate content schedule. Please connect your Spotify account first."
+        )
+    
+    if not instagram_connection:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Instagram account must be connected to generate content schedule. Please connect your Instagram account first."
         )
     
     # Generate schedule
