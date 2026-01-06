@@ -20,7 +20,7 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual Environment
+# Virtual environments
 venv/
 env/
 ENV/
@@ -29,8 +29,9 @@ ENV/
 # Environment variables
 .env
 .env.local
+.env.*.local
 
-# IDE
+# IDEs
 .vscode/
 .idea/
 *.swp
@@ -40,6 +41,7 @@ ENV/
 # Database
 *.db
 *.sqlite
+*.sqlite3
 
 # Logs
 *.log
@@ -56,12 +58,18 @@ htmlcov/
 # Alembic
 alembic/versions/*.pyc
 
-# ML Models
-*.pkl
-*.joblib
-ml_models/models/
+# Node (for frontend)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnp
+.pnp.js
 
-# Media files (if stored locally)
-uploads/
-media/
+# Frontend build
+frontend/dist/
+frontend/build/
 
+# ML models (if large)
+ml_models/models/*.pkl
+!ml_models/models/.gitkeep

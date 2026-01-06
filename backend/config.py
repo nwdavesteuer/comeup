@@ -19,7 +19,12 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
     # CORS
-    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8000"]
+    CORS_ORIGINS: List[str] = [
+        "http://localhost:3000",
+        "http://localhost:5173",  # Vite dev server
+        "http://localhost:8000"
+    ]
+    FRONTEND_URL: str = ""  # Production frontend URL (set in production)
     
     # Spotify API
     SPOTIFY_CLIENT_ID: str = ""

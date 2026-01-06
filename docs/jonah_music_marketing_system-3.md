@@ -1668,6 +1668,1315 @@ This gives you:
 
 ---
 
+## Understanding Data Collection: The Foundation
+
+Before diving into the full plan, it's critical to understand how you'll actually collect the data that powers everything. This is the foundation that makes AI insights possible.
+
+### The Two Types of Data Collection
+
+**1. Historical Data (What happened before they signed up)**
+- Limited but valuable for context
+- Varies by platform
+- One-time backfill when artist connects
+
+**2. Prospective Data (What happens after they sign up)**
+- Complete and accurate
+- Collected automatically daily
+- This is where the real value comes from
+
+### What You Can Actually Get: Platform by Platform
+
+#### Spotify for Artists ✅ EXCELLENT HISTORICAL DATA
+**Available when artist connects:**
+- 2-3 years of streaming history
+- Daily/weekly/monthly streams
+- Playlist placements with dates
+- Listener demographics
+- Geographic data
+
+**How to get it:**
+```python
+# On first connection, backfill historical data
+start_date = datetime.now() - timedelta(days=730)  # 2 years
+spotify_stats = spotify_api.get_time_series_data(
+    access_token=artist_token,
+    start_date=start_date,
+    end_date=datetime.now(),
+    time_period='day'
+)
+# Store all historical daily metrics
+```
+
+**Value:** Can retroactively correlate social activity with streaming growth
+
+#### Instagram ⚠️ LIMITED HISTORICAL DATA
+**Available when artist connects:**
+- Last 100 posts (or all posts depending on account size)
+- Current likes/comments (not historical progression)
+- Caption and media URLs
+- Post timestamps
+
+**NOT available:**
+- Historical impressions/reach (only recent posts)
+- Story data older than 24 hours
+- How metrics changed over time
+
+**How to get it:**
+```python
+# Backfill existing posts
+all_posts = instagram_api.get_user_media(
+    access_token=artist_token,
+    limit=100  # Can paginate for more
+)
+# Store posts with current metrics
+```
+
+**Limitation:** You see a post from 6 months ago has 1,000 likes, but you don't know if it got 900 in the first week or slowly over time.
+
+#### TikTok ⚠️ LIMITED HISTORICAL DATA
+**Available when artist connects:**
+- Recent videos (usually last 100)
+- Current views/likes/comments
+- Video URLs and metadata
+
+**NOT available:**
+- Historical performance progression
+- Detailed analytics older than 30 days
+
+#### YouTube ✅ EXCELLENT HISTORICAL DATA
+**Available when artist connects:**
+- ALL videos ever uploaded
+- Detailed analytics for any time period
+- Views, watch time, traffic sources
+- Audience demographics
+
+**How to get it:**
+```python
+# Get all videos
+videos = youtube_api.get_channel_videos(access_token=artist_token)
+
+for video in videos:
+    # Get analytics going back years
+    analytics = youtube_api.get_video_analytics(
+        video_id=video.id,
+        start_date='2020-01-01',
+        end_date=datetime.now()
+    )
+```
+
+**Value:** Best platform for historical analysis
+
+### The 30-Day Timeline: How Data Quality Improves
+
+#### Day 0 (Artist Connects):
+**What you have:**
+- Spotify: 2 years of streaming data ✅
+- Instagram: Last 100 posts (current metrics only) ⚠️
+- TikTok: Recent videos (current metrics only) ⚠️
+- YouTube: Complete history ✅
+
+**What you can show:**
+- Basic dashboard with historical trends
+- "Here's your data in one place"
+- Growth charts from Spotify/YouTube history
+
+**What you CANNOT yet do:**
+- Attribute specific social posts to stream increases (no progression data)
+- Predict future performance (not enough pattern data)
+- Give confident recommendations (insufficient sample size)
+
+#### Days 1-30 (Building Prospective Data):
+**What's happening automatically:**
+```python
+# Daily background job (runs at 2 AM)
+@scheduler.scheduled_job('cron', hour=2)
+async def sync_all_artists():
+    for artist in active_artists:
+        # Pull yesterday's data from all platforms
+        sync_spotify(artist.id)      # New streams
+        sync_instagram(artist.id)    # New posts + updated metrics
+        sync_tiktok(artist.id)       # New videos + views
+        sync_youtube(artist.id)      # New videos + analytics
+        
+        # Calculate attribution
+        calculate_stream_lift_for_recent_posts(artist.id)
+```
+
+**What you're building:**
+- Clean time-series data for each platform
+- Post performance tracked over 24hrs, 48hrs, 7 days
+- Correlation between social activity and stream spikes
+- Artist's unique patterns emerging
+
+**What you can show (getting better each week):**
+- "Your streams increased 15% this week"
+- "This post got X engagement"
+- Basic trends and growth metrics
+
+#### Day 30+ (AI Insights Become Possible):
+**What you now have:**
+- 30 days of clean, prospective data
+- Performance trajectory for every post
+- Baseline metrics for comparison
+- Enough data points to see patterns
+
+**What you can now do:**
+```python
+def can_generate_insights(artist_id):
+    post_count = count_posts_last_30_days(artist_id)
+    
+    if post_count < 5:
+        return False, "Post at least 5 times for insights"
+    
+    return True, "Ready for AI analysis!"
+```
+
+**What AI can tell them:**
+- "Your Tuesday posts drive 40% more streams than Friday posts"
+- "Behind-the-scenes content gets 2.3x engagement"
+- "Posts at 2-4pm perform best for you"
+- "Your TikTok content converts better to streams than Instagram"
+
+#### Day 90+ (High-Quality Insights):
+- 90 days of data = statistically significant patterns
+- Can run A/B tests with confidence intervals
+- Predictions become quite accurate
+- Benchmarks emerge as you get more artists
+
+### The Attribution Challenge (And How to Solve It)
+
+**The Problem:**
+You can't directly link an Instagram post to specific Spotify streams. The platforms don't talk to each other.
+
+**The Solution: Time-Based Correlation**
+```python
+def calculate_spotify_traffic_lift(post_id):
+    """
+    Estimate stream increase driven by a social post
+    """
+    post = get_post(post_id)
+    artist_id = post.artist_id
+    post_date = post.posted_at.date()
+    
+    # Get baseline: average daily streams for 3 days before post
+    baseline = avg_daily_streams(
+        artist_id=artist_id,
+        start=post_date - timedelta(days=3),
+        end=post_date - timedelta(days=1)
+    )
+    
+    # Get lift: total streams for 2 days after post
+    post_period_streams = sum_daily_streams(
+        artist_id=artist_id,
+        start=post_date,
+        end=post_date + timedelta(days=2)
+    )
+    
+    # Calculate lift above baseline
+    expected_streams = baseline * 2  # 2 days
+    actual_lift = post_period_streams - expected_streams
+    
+    return max(0, actual_lift)  # Don't show negative
+```
+
+**What this gives you:**
+- "This post was followed by +200 streams above your baseline"
+- Not perfect attribution, but directionally correct
+- Good enough for insights and recommendations
+
+**Edge cases it handles:**
+- If artist has release or playlist add, spike affects all posts that week
+- You can flag anomalies: "Unusually high activity this week"
+- Compare multiple posts in same period to see which drove more
+
+### Manual Data Entry (Bridge Solution)
+
+For the first 30 days while building data, offer manual entry:
+
+```python
+@app.post("/api/content/manual-entry")
+async def manual_content_entry(
+    platform: str,
+    posted_at: datetime,
+    url: str,
+    description: str,
+    performance: dict,  # {likes: 500, comments: 50}
+    artist: Artist = Depends(get_current_artist)
+):
+    """
+    Artist can manually log important past posts
+    """
+    # Store post and performance data
+    # Allows AI to reference: "Your viral post from 3 months ago shows..."
+```
+
+**Use case:**
+- "I had a viral TikTok 3 months ago that drove tons of streams"
+- Artist manually enters: date, link, current metrics, context
+- Now AI can analyze it even without historical tracking
+
+### The Practical Onboarding Flow
+
+**When artist first connects:**
+
+```python
+async def onboard_artist(artist_id):
+    # Step 1: Backfill what's available
+    spotify_days = await backfill_spotify_data(artist_id)
+    instagram_posts = await backfill_instagram_posts(artist_id) 
+    youtube_videos = await backfill_youtube_data(artist_id)
+    tiktok_videos = await backfill_tiktok_videos(artist_id)
+    
+    # Step 2: Set clear expectations
+    return {
+        "status": "connected",
+        "message": f"""
+        ✅ Connected successfully!
+        
+        Historical data retrieved:
+        • Spotify: {spotify_days} days of streaming history
+        • Instagram: {instagram_posts} posts  
+        • YouTube: {youtube_videos} videos
+        • TikTok: {tiktok_videos} videos
+        
+        📊 We'll track your performance daily from now on.
+        
+        ⏰ In 30 days, you'll have enough data for AI-powered insights!
+        
+        In the meantime:
+        • View your unified dashboard
+        • Track new posts automatically  
+        • Manually add important past posts
+        • See basic growth trends
+        """
+    }
+```
+
+### What This Means for Your Build Timeline
+
+**Week 1-2: OAuth + Backfill**
+- Get Spotify OAuth working → backfill 2 years
+- Get Instagram OAuth working → backfill recent posts
+- Show basic dashboard with historical data
+- **Value delivered:** "Your data in one place"
+
+**Week 3-4: Daily Sync**
+- Background job syncs all platforms daily
+- Track new posts automatically
+- Store performance metrics over time
+- **Value delivered:** "Automatic tracking going forward"
+
+**Week 5-6: Attribution Engine**
+- Implement time-based correlation
+- Calculate stream lift for each post
+- Show: "This post → +X streams"
+- **Value delivered:** "See what content drives streams"
+
+**Week 7-8: AI Insights**
+- Artists now have 30+ days of data
+- Claude API analyzes patterns
+- Generate personalized recommendations
+- **Value delivered:** "Know what to do differently"
+
+### Key Insight: You Don't Need Years of Data
+
+**What people think you need:**
+- Thousands of examples from many artists
+- Years of historical data
+- Perfect attribution
+
+**What you actually need:**
+- 30 days of clean prospective data
+- Time-based correlation (directionally correct)
+- Artist's own patterns (not industry benchmarks)
+
+**Why this works:**
+- Artists care most about: "What's working FOR ME?"
+- 30 days is enough to see clear patterns
+- Their own data is more relevant than generic benchmarks
+- Claude API can analyze patterns humans would miss
+
+### The Bottom Line on Data Collection
+
+**Historical data:** Nice to have, not essential
+- Spotify/YouTube: Excellent historical data ✅
+- Instagram/TikTok: Limited historical data ⚠️
+- Manual entry: Bridges the gap for important past posts
+
+**Prospective data:** This is your real asset
+- All platforms: Excellent once connected ✅
+- Collected automatically daily
+- Accurate performance tracking over time
+- Powers all meaningful insights
+
+**Timeline to value:**
+- Day 0: Show historical data, promise future insights
+- Day 30: Generate first AI recommendations
+- Day 90: High-quality, statistically significant insights
+
+**Your competitive advantage:**
+- Most tools show data but don't explain what it means
+- You show attribution (social → streams)
+- You give AI-powered recommendations based on their actual patterns
+- You make insights actionable ("Post Tuesday at 2pm, not Friday at 8pm")
+
+This approach is achievable in 3 months and creates real value even with limited historical data.
+
+---
+
+---
+
+## Strategic Recommendation: Phased Build Approach
+
+After analyzing the complete picture - technical requirements, competitive landscape, and user needs - here's the honest recommendation for how Jonah should approach this:
+
+### The Core Insight
+
+**The current spec is optimized for artists who ALREADY have activity and data to analyze.** This is actually the right starting point, but it creates a gap for brand new artists with zero following.
+
+**Recommendation: Build in two phases, serving different user types sequentially.**
+
+---
+
+### Phase 1: MVP (Months 1-3) - Serve Artists With Existing Activity
+
+**Target Users:**
+- "Stalled Artists" (1K-10K followers, plateaued)
+- "Growing Artists" (10K-100K followers, optimizing)
+
+**Why start here:**
+1. **They have data on Day 0** - Can provide immediate value from historical analysis
+2. **Will pay more** ($100-200/month vs. $25-50/month)
+3. **Easier to validate** - Can show clear before/after metrics
+4. **Kiss Bang is perfect pilot** - BMG artist with existing activity = ideal first user
+5. **Proves core value prop** - Attribution and insights are the real differentiator
+
+**What to build:**
+- Multi-tenant platform with OAuth integrations
+- Automated daily data collection (Spotify, Instagram, TikTok, YouTube)
+- Attribution engine (social content → stream increases)
+- AI insights using Claude API (analyzing artist's own data)
+- Content calendar with optimal timing suggestions
+- Performance predictions on structured data (time, day, content type)
+
+**Success metrics by Month 3:**
+- 5-10 paying artists ($500-1,500 MRR)
+- 90%+ retention (artists actively using it)
+- Clear before/after case studies
+- Jonah has portfolio piece that gets him hired at $95K+
+
+**What you DON'T build yet:**
+- Genre playbooks for new artists
+- Content template libraries
+- New artist benchmarking
+- Release strategy generators
+
+---
+
+### Phase 2: Expansion (Months 4-6) - Serve New Artists
+
+**Target Users:**
+- "Launchers" (0-1K followers, just starting)
+- Examples: David with his album, any artist's first release
+
+**Why wait until Phase 2:**
+1. **Core product must work first** - Can't serve beginners if fundamentals are broken
+2. **Learn from existing users** - Their data creates benchmarks for new artists
+3. **Different features required** - Need to build on top of working foundation
+4. **Proves you can ship** - Get hired based on Phase 1, Phase 2 becomes nice-to-have
+
+**What to add:**
+```python
+# New artist onboarding flow
+class NewArtistOnboarding:
+    
+    def detect_new_artist(self, artist_id):
+        """Identify if artist is brand new"""
+        artist = get_artist(artist_id)
+        
+        return (
+            artist.monthly_listeners < 500 and
+            artist.follower_count < 200 and
+            artist.historical_posts < 10
+        )
+    
+    def provide_immediate_value(self, artist_id):
+        """What new artists get on Day 0"""
+        
+        artist = get_artist(artist_id)
+        
+        # Generate genre-specific strategy
+        strategy = generate_release_strategy(
+            genre=artist.genre,
+            release_type='single',  # or 'album', 'EP'
+            current_following=artist.follower_count
+        )
+        
+        # Pre-populate content calendar with templates
+        calendar = populate_template_calendar(
+            strategy=strategy,
+            artist_id=artist_id
+        )
+        
+        # Set up milestone tracking
+        milestones = [
+            {'target': 100, 'metric': 'followers', 'timeframe': '30 days'},
+            {'target': 100, 'metric': 'monthly_listeners', 'timeframe': '60 days'},
+            {'target': 500, 'metric': 'monthly_listeners', 'timeframe': '90 days'}
+        ]
+        
+        return {
+            'strategy': strategy,
+            'calendar': calendar,
+            'milestones': milestones,
+            'message': 'Welcome! Let's build your audience from scratch.'
+        }
+```
+
+**New features to build:**
+
+**1. Genre Playbooks**
+```python
+class GenrePlaybook:
+    """Pre-built strategies by genre"""
+    
+    playbooks = {
+        'indie': {
+            'platform_priority': ['tiktok', 'instagram', 'spotify'],
+            'content_mix': {
+                'behind_the_scenes': 0.40,
+                'performance_clips': 0.20,
+                'personal_story': 0.20,
+                'promotional': 0.20
+            },
+            'posting_frequency': '4-5x per week',
+            'typical_timeline': {
+                '30_days': '50-200 followers, 10-100 streams',
+                '90_days': '200-800 followers, 100-1000 streams'
+            }
+        },
+        'hip_hop': {
+            'platform_priority': ['tiktok', 'youtube', 'instagram'],
+            'content_mix': {
+                'freestyles': 0.30,
+                'behind_the_scenes': 0.25,
+                'lifestyle': 0.25,
+                'promotional': 0.20
+            },
+            'posting_frequency': '5-7x per week',
+            # ...
+        }
+        # ... other genres
+    }
+```
+
+**2. New Artist Benchmarks**
+```python
+class NewArtistBenchmarks:
+    """What's normal for artists just starting"""
+    
+    def get_benchmark(self, days_since_start, genre):
+        """Compare artist to typical new artist trajectory"""
+        
+        benchmarks = {
+            'first_30_days': {
+                'followers': (50, 200),  # (min, max) typical range
+                'monthly_listeners': (10, 100),
+                'engagement_rate': 0.025,  # 2.5%
+                'posting_frequency': (12, 20)  # posts per month
+            },
+            'days_30_60': {
+                'followers': (200, 500),
+                'monthly_listeners': (100, 500),
+                'engagement_rate': 0.030,
+                'posting_frequency': (16, 24)
+            },
+            'days_60_90': {
+                'followers': (400, 1000),
+                'monthly_listeners': (200, 1000),
+                'engagement_rate': 0.035,
+                'posting_frequency': (20, 28)
+            }
+        }
+        
+        # Adjust by genre (hip-hop grows faster on TikTok, etc.)
+        # Return: "You're tracking above/on/below typical trajectory"
+```
+
+**3. Content Template Library**
+```python
+class ContentTemplates:
+    """Actual examples of what to post"""
+    
+    templates = [
+        {
+            'id': 'studio_bts_first_day',
+            'name': 'Studio BTS - First Day Recording',
+            'description': 'Show your recording setup and explain your process',
+            'platform': 'instagram',
+            'format': 'reel',
+            'duration': '15-30 seconds',
+            'example_caption': 'Starting something new today. Here's where the magic happens 🎵 #newmusic #indieartist',
+            'example_video_url': 'https://example.com/template-video',
+            'performance_data': {
+                'avg_engagement_rate': 0.042,
+                'best_for': 'building initial followers'
+            }
+        },
+        {
+            'id': 'song_snippet_lyrics',
+            'name': 'Song Snippet with Lyrics Overlay',
+            'description': '15-second preview of your song with lyrics on screen',
+            'platform': 'tiktok',
+            'format': 'video',
+            'duration': '15 seconds',
+            'example_caption': 'New music dropping soon 🎶 What do these lyrics mean to you?',
+            'performance_data': {
+                'avg_engagement_rate': 0.038,
+                'best_for': 'pre-release buzz'
+            }
+        },
+        {
+            'id': 'personal_story_why_music',
+            'name': 'Personal Story - Why I Make Music',
+            'description': 'Share your origin story or what music means to you',
+            'platform': 'instagram',
+            'format': 'carousel',
+            'slides': 5,
+            'example_caption': 'Why I started making music... (swipe to read my story)',
+            'performance_data': {
+                'avg_engagement_rate': 0.051,
+                'best_for': 'building authentic connection'
+            }
+        }
+        # ... 20-30 more templates
+    ]
+    
+    def get_templates_for_stage(self, artist_stage, genre):
+        """Recommend specific templates based on where artist is"""
+        
+        if artist_stage == 'pre_release':
+            return self.filter_templates(tags=['teaser', 'bts', 'anticipation'])
+        elif artist_stage == 'release_week':
+            return self.filter_templates(tags=['announcement', 'thank_you', 'stream_link'])
+        elif artist_stage == 'post_release':
+            return self.filter_templates(tags=['behind_meaning', 'fan_engagement', 'momentum'])
+```
+
+**4. Release Strategy Generator**
+```python
+async def generate_release_strategy(artist_id, release_type='single'):
+    """Create personalized release plan using Claude API"""
+    
+    artist = get_artist(artist_id)
+    
+    prompt = f"""
+    Create a detailed 8-week content and release strategy for {artist.artist_name},
+    a new {artist.genre} artist with currently {artist.follower_count} followers
+    and {artist.monthly_listeners} monthly listeners.
+    
+    They have a {release_type} ready to release in 4 weeks.
+    
+    Provide a week-by-week plan including:
+    
+    Week 1-3 (Pre-Release Build-Up):
+    - Specific content ideas (be detailed - what to show, what to say)
+    - Which platforms to post on
+    - How to build anticipation without being annoying
+    
+    Week 4 (Release Week):
+    - Pre-save campaign strategy
+    - Release day content schedule
+    - How to maximize Day 1 impact
+    
+    Week 5-8 (Post-Release Momentum):
+    - How to maintain and build on release momentum
+    - Content ideas to keep people engaged
+    - When to start teasing next release
+    
+    For each week, provide:
+    - 3-5 specific post ideas with platform, format, and caption suggestions
+    - Optimal posting times/frequency
+    - What success looks like (realistic expectations)
+    
+    Be specific, actionable, and encouraging. Remember they're just starting out.
+    """
+    
+    strategy = await claude_api.generate(prompt)
+    
+    return {
+        'strategy_text': strategy,
+        'generated_at': datetime.now(),
+        'can_customize': True  # Artist can edit before accepting
+    }
+```
+
+**5. Early Validation System**
+```python
+class EarlyValidation:
+    """Give new artists confidence they're on track"""
+    
+    def generate_week_2_check_in(self, artist_id):
+        """After 2 weeks, give validation"""
+        
+        artist = get_artist(artist_id)
+        posts = get_posts_last_14_days(artist_id)
+        
+        post_count = len(posts)
+        avg_engagement = calculate_avg_engagement(posts)
+        follower_growth = get_follower_growth_14_days(artist_id)
+        
+        # Compare to new artist benchmarks
+        benchmark = NewArtistBenchmarks().get_benchmark(14, artist.genre)
+        
+        # Generate encouraging feedback
+        feedback = []
+        
+        if post_count >= 6:
+            feedback.append(f"✅ You've posted {post_count} times - great consistency!")
+        else:
+            feedback.append(f"⚠️ You've posted {post_count} times. Try for 6-8 in your first 2 weeks.")
+        
+        if avg_engagement > benchmark['engagement_rate']:
+            feedback.append(f"✅ Your {avg_engagement:.2%} engagement rate is above average for new artists!")
+        else:
+            feedback.append(f"📊 Your engagement is building. Keep at it - growth accelerates after 30 days.")
+        
+        if follower_growth > 20:
+            feedback.append(f"✅ +{follower_growth} followers in 2 weeks is solid growth!")
+        else:
+            feedback.append(f"📈 Follower growth starts slow. You're at +{follower_growth}, which is normal for week 2.")
+        
+        # Early pattern detection (even with limited data)
+        if len(posts) >= 5:
+            top_post = max(posts, key=lambda p: p.engagement_rate)
+            feedback.append(f"💡 Your '{top_post.content_type}' post on {top_post.posted_at.strftime('%A')} performed best - try more like that!")
+        
+        return {
+            'message': '\n'.join(feedback),
+            'on_track': True,  # Always encouraging for week 2
+            'next_steps': [
+                'Keep posting 3-5x per week',
+                f'Focus more on {identify_best_content_type(posts)}',
+                'In 2 more weeks, we'll have enough data for personalized insights'
+            ]
+        }
+```
+
+**Success metrics by Month 6:**
+- 20-30 total artists (mix of existing activity + new artists)
+- $3K-5K MRR
+- Clear validation that new artist features drive value
+- Jonah either has great job offer OR real business
+
+---
+
+### Why This Phased Approach Makes Sense
+
+**For building (technical):**
+- Phase 1 is already complex (OAuth, data pipelines, attribution)
+- Don't add complexity of template libraries and strategy generators until core works
+- Learn what insights matter most before building new artist features
+
+**For validation (product):**
+- Easier to prove value with artists who have data Day 0
+- Can iterate faster with engaged users who see immediate results
+- Builds data asset that makes Phase 2 features better (benchmarks from real users)
+
+**For Jonah's career (strategic):**
+- Month 3: Has working product with paying customers = great interview story
+- Can get hired without building Phase 2 if job offer is great
+- If building business, Phase 2 expands addressable market
+
+**For users:**
+- Stalled/Growing artists need this NOW (Phase 1)
+- New artists can wait 3-6 months (still better than current options)
+- David can be first Phase 2 beta tester with his release
+
+---
+
+### The Build Timeline (Updated)
+
+#### Months 1-3: Phase 1 MVP
+
+**Target: Stalled & Growing Artists**
+
+**Month 1:**
+- Week 1-2: Multi-tenant auth + Spotify OAuth + backfill
+- Week 3-4: Add Instagram/TikTok + daily sync jobs
+
+**Month 2:**
+- Week 5-6: Attribution engine (time-based correlation)
+- Week 7-8: Claude API integration for insights
+
+**Month 3:**
+- Week 9-10: Content calendar + scheduling
+- Week 11-12: Predictions on structured data, polish, test
+
+**Deliverable:** Working platform, 5-10 paying artists, case studies
+
+#### Months 4-6: Phase 2 Expansion (Optional - Depends on Job Search)
+
+**Target: Add New Artist Features**
+
+**Month 4:**
+- Genre playbooks and templates
+- New artist benchmarking system
+- Early validation features
+
+**Month 5:**
+- Release strategy generator
+- Template library with examples
+- Progress tracking and milestones
+
+**Month 6:**
+- Collaboration features
+- Community elements
+- Advanced new artist features
+
+**Deliverable:** Platform serves full spectrum of artists
+
+---
+
+### Recommendation for Jonah
+
+**The pragmatic path:**
+
+1. **Build Phase 1 (Months 1-3)** following the original spec
+   - Use Kiss Bang as pilot
+   - Target stalled/growing artists
+   - Prove core value proposition
+
+2. **Start job search at Month 3**
+   - Portfolio is strong enough to get interviews
+   - 5-10 paying customers proves product-market fit
+   - Can keep platform running as side income
+
+3. **Build Phase 2 (Months 4-6) IF:**
+   - Job search is slow OR
+   - Platform revenue justifies continuing OR
+   - He wants to pursue this as business
+
+4. **Decision point at Month 3:**
+   - Great job offer ($95K+) → Take it, keep platform as side project
+   - No great offers yet → Build Phase 2 while continuing search
+   - Platform at $3K+ MRR → Consider full-time on business
+
+**Why this is smart:**
+- Doesn't commit to 6 months upfront
+- Gets to milestone (working product) in 3 months
+- Optionality at Month 3 based on results
+- Phase 2 can happen while employed if job is good
+
+**For David (his dad):**
+- You can't test the platform until Month 4-6 (Phase 2)
+- But you can help validate Phase 1 features by connecting with artists who fit that profile
+- Your release timing (likely 4-6 months out) aligns perfectly with Phase 2
+
+---
+
+## User Personas & Journeys: Supporting the Strategy
+
+Now let's define the specific user types that inform this phased approach, starting with Phase 1 users and then Phase 2 users.
+
+### Phase 1 Target Users (Months 1-3)
+
+#### Persona 1: "The Stalled Artist" 
+**Profile:**
+- Been releasing music for 1-3 years
+- 1,000-10,000 followers
+- 1,000-10,000 monthly listeners
+- Plateau'd, not sure how to break through
+- Posting regularly but not seeing growth
+
+**Example: Kiss Bang (pre-BMG deal)**
+- Released multiple singles over 2 years
+- Built modest following to ~5K followers
+- Growth stalled around 3K monthly listeners
+- Couldn't figure out why they weren't breaking through
+- Finally got BMG deal, now want to optimize
+
+**Pain Points:**
+- "I'm doing everything right but not growing"
+- Can't tell what's working vs. wasting time
+- Sees other artists breaking through, wonders why not them
+- Considering giving up or doubling down (unsure which)
+- Needs data to make better decisions
+
+**Goals:**
+- Understand what's actually working vs. not
+- Find the next growth lever to break plateau
+- Stop wasting time on ineffective content
+- Get to next level (playlist placements, touring viability)
+- Make data-driven decisions about time investment
+
+**What They Need from Platform:**
+- **Day 0:** Analysis of historical content - what worked before?
+- **Week 2:** Clear attribution - which content drives streams?
+- **Day 30:** Comprehensive insights with statistical significance
+- **Ongoing:** Experiments to test new growth hypotheses
+- **Benchmarks:** "Am I actually behind, or is this normal?"
+
+**User Journey:**
+
+**Day 0 - Onboarding:**
+```
+Kiss Bang signs up, connects accounts.
+
+Platform backfills:
+- Spotify: 2 years of streaming data (shows plateau at month 8)
+- Instagram: Last 100 posts
+- TikTok: Recent videos
+- YouTube: All music videos
+
+Immediate dashboard shows:
+"Your growth analysis:
+- Strong start: 0 → 3K listeners in first 8 months
+- Plateau: Stuck at 3K for past 16 months
+- Your engagement rate: 2.8% (slightly below indie average of 3.2%)
+
+We're now tracking everything daily. In 30 days, I'll tell you 
+exactly what's working and what to change."
+```
+
+**Week 2 - Early Insights:**
+```
+Platform has been tracking for 14 days.
+
+"Early patterns emerging:
+- Your Tuesday TikTok posts are driving +150 streams each (vs. Friday posts: +40)
+- Behind-the-scenes content: 3.9% engagement vs. performance clips: 1.8%
+- Instagram Reels converting 2x better to Spotify than TikTok
+
+Recommendation: Post 3x per week on Tuesday/Thursday/Sunday, 
+focus on BTS content, prioritize Instagram Reels."
+```
+
+**Day 30 - Comprehensive Analysis:**
+```
+"30-Day Performance Report for Kiss Bang
+
+You've broken through the plateau!
+
+Growth:
+- Monthly listeners: 3,200 → 4,100 (+28% in 30 days!)
+- Followers: 5,200 → 5,850 (+12.5%)
+- Your best month in over a year
+
+What's Working (Data-Backed):
+1. Tuesday posts drive 2.4x more Spotify traffic than other days
+2. Behind-the-scenes studio content: 4.2% engagement (vs. your 2.8% average)
+3. Instagram Reels → Spotify conversion: 8% (vs. TikTok: 3%)
+4. Posts with questions in captions: 3x more comments
+
+What's Not Working:
+1. Friday evening posts: consistently underperform (-40% vs. average)
+2. Promotional posts: 1.4% engagement (people tune out)
+3. TikTok effort not paying off in streams (focus on Instagram)
+
+Strategic Recommendations:
+1. Double down on Instagram Reels (3-4x per week)
+2. Post Tuesday/Thursday 2-4pm PST
+3. Keep promotional content under 20% of total
+4. Test: Collaborate with similar artist in your genre
+
+Your Growth Forecast:
+At this rate: 6,000 monthly listeners in 90 days
+Playlist eligibility threshold (10K): ~6 months
+With optimizations: Could hit 10K in 4 months
+
+Next experiment to run:
+Test question-based captions vs. statement captions 
+(12 posts, 6 each type, measure comment rate difference)"
+```
+
+**Revenue Potential:**
+- Will pay $100-150/month - serious about their career
+- High retention if platform shows clear cause/effect
+- Good word-of-mouth to other stalled artists
+- This is the core customer for Phase 1
+
+---
+
+#### Persona 2: "The Growing Artist"
+**Profile:**
+- Established but not famous
+- 10,000-100,000 followers
+- 10,000-100,000 monthly listeners  
+- Has label or management support
+- Regular release schedule
+- Professionalizing their career
+
+**Example: Kiss Bang (post-BMG deal)**
+- Now has label backing and budget
+- Growing consistently
+- Wants to optimize and scale
+- Needs professional reporting for label meetings
+
+**Pain Points:**
+- "What's the ROI on our content efforts?"
+- Which content formats justify the production cost?
+- Label wants data-driven strategy, not gut feel
+- Need to prove content spend generates listeners
+- Competition for label attention and budget
+
+**Goals:**
+- Maximize ROI on content creation time/money
+- Scale what's working, cut what's not
+- Make data-driven decisions with label
+- Build sustainable career trajectory
+- Professional analytics for stakeholders
+
+**What They Need from Platform:**
+- **Day 0:** Immediate comprehensive insights
+- **Week 1:** Attribution and ROI analysis
+- **Ongoing:** Predictive campaign modeling
+- **Advanced:** A/B testing framework
+- **Reporting:** Professional exports for label meetings
+
+**User Journey:**
+
+**Day 0 - Onboarding:**
+```
+Kiss Bang connects (now with BMG backing).
+
+Platform recognizes: Established artist, pulls comprehensive data.
+
+Immediate analysis:
+"Welcome back to the pro tier!
+
+Your numbers:
+- 45K monthly listeners (growing 12% month-over-month)
+- 28K Instagram followers
+- 15K TikTok followers
+- Strong engagement: 4.1% average
+
+Historical analysis (past 90 days):
+- Your release campaign drove 12K new listeners
+- Best performing content: Studio vlogs (5.2% engagement)
+- ROI by platform:
+  • Instagram: $0.28 per new listener (including ad spend)
+  • TikTok: $0.45 per new listener
+  • YouTube: $1.20 per new listener
+  
+Your competitive position:
+- Top 15% for engagement in indie pop category
+- Growing faster than 78% of similar artists
+
+Predictive models ready. Campaign simulator active."
+```
+
+**Week 1 - Campaign Planning:**
+```
+"Planning next single release?
+
+Based on your last campaign + current trajectory:
+
+Campaign Simulator:
+Strategy A: TikTok-first approach
+- 15 TikToks over 3 weeks, 5 Instagram Reels
+- Predicted: 8,000-12,000 new listeners
+- Confidence: 73%
+- Cost: $800 in ad spend
+- ROI: $0.35-$0.50 per listener
+
+Strategy B: Instagram-first approach  
+- 10 Instagram Reels, 8 TikToks, 5 Stories
+- Predicted: 10,000-14,000 new listeners
+- Confidence: 81%
+- Cost: $1,200 in ad spend
+- ROI: $0.28-$0.38 per listener
+
+Recommendation: Strategy B (higher confidence, better ROI)
+
+Generate detailed plan?"
+```
+
+**Ongoing - Professional Reporting:**
+```
+"Monthly Report for BMG - Kiss Bang Performance
+
+Executive Summary:
+- Monthly listeners: 45K → 52K (+15.6%)
+- Content ROI: $0.32 per new listener (target: $0.40)
+- Engagement rate: 4.1% (above category average: 3.2%)
+- Recommendation: Increase Instagram budget by 30%
+
+[Detailed charts, attribution analysis, competitive benchmarking]
+
+Export as PDF for label meeting?"
+```
+
+**Revenue Potential:**
+- Will pay $200-300/month for pro features
+- Label might pay for multiple artists ($500/month for 10-artist tier)
+- High retention (mission-critical tool)
+- Smaller market than stalled artists, but higher LTV
+
+---
+
+### Phase 2 Target Users (Months 4-6)
+
+#### Persona 3: "The Launcher"
+**Profile:**
+- Brand new artist or first serious release
+- 0-500 followers across platforms
+- 0-500 monthly listeners on Spotify
+- Has music ready but no audience yet
+- Full of enthusiasm but overwhelmed
+
+**Example: David (Jonah's dad)**
+- Album in the works, single ready to release
+- No following currently
+- Wants to do this right from the start
+- Willing to invest time but needs direction
+
+**Pain Points:**
+- Overwhelmed by all the platforms and conflicting advice
+- No idea what "good" looks like for a new artist
+- Fear of wasting months on wrong strategies
+- Needs validation that progress is normal
+- Difficult early stage where growth feels painfully slow
+- Tempted to give up when posts get 20 views
+
+**Goals:**
+- Build initial audience from absolute zero
+- Get first release off the ground successfully
+- Figure out what works without years of trial-and-error
+- Stay motivated through difficult early weeks
+- Establish foundation for long-term music career
+
+**What They Need from Platform:**
+- **Day 0:** Pre-release strategy and step-by-step plan
+- **Week 1-2:** Validation that slow progress is normal
+- **Day 30:** First personalized insights (even with limited data)
+- **Ongoing:** Motivation through progress tracking
+- **Templates:** Actual examples of what to post
+
+**User Journey:**
+
+**Day 0 - Onboarding:**
+```
+David signs up, connects fresh accounts.
+
+Platform detects: New artist, no following.
+
+"Welcome David!
+
+I see you're just starting out - that's exciting! Building from zero 
+is hard but totally doable with the right strategy.
+
+Based on your genre (indie/folk), I've created your personalized 
+8-week release plan:
+
+📅 Your Release Timeline:
+- Weeks 1-4: Build anticipation (pre-release content)
+- Week 5: Release week (your single drops!)
+- Weeks 6-8: Maintain momentum (post-release strategy)
+
+📝 Content Calendar:
+I've pre-filled 24 post ideas to get you started:
+- 10 behind-the-scenes clips (studio, songwriting, process)
+- 6 personal story posts (why you make music, your journey)
+- 5 song teasers (snippets, lyric previews)
+- 3 release day posts
+
+🎯 Platform Strategy:
+Focus 60% on TikTok, 30% on Instagram, 10% on YouTube for now.
+Here's why: [explanation tailored to indie/folk]
+
+📊 What to Expect:
+Realistic timeline for new indie artists:
+- Week 4: 50-150 followers, building foundation
+- Week 8: 150-400 followers, first momentum
+- Week 12: 300-800 followers, established presence
+
+Let's get started! Here's your first post to make..."
+```
+
+**Week 2 - Early Validation:**
+```
+"David's Week 2 Check-In
+
+Great start! Here's where you're at:
+
+Progress:
+✅ 8 posts in 2 weeks (perfect cadence!)
+✅ 47 new followers (right on track for new artists)
+✅ 3.1% engagement rate (above average for week 2!)
+
+Early Patterns:
+💡 Your behind-the-scenes studio posts are getting 2x more engagement
+💡 Tuesday afternoon posts performing best
+💡 Posts with you visible getting 40% more engagement than lyric videos
+
+This Week's Mission:
+1. Post 2 more BTS studio clips (Tuesday/Thursday 2-4pm)
+2. Show your face more - people connect with YOU
+3. Try asking a question in your next caption
+
+You're Tracking Ahead of Typical New Artists!
+Most new artists have 20-30 followers by week 2. 
+You're at 47 - keep this up!
+
+In 2 more weeks, I'll have enough data for deeper insights."
+```
+
+**Day 30 - First Real Insights:**
+```
+"David's 30-Day Performance Analysis 🎉
+
+Congrats on your first month! Here's what happened:
+
+Your Growth:
+- Followers: 0 → 185 (+185, from absolute zero!)
+- Monthly Listeners: 0 → 312 (your single has an audience!)
+- Engagement Rate: 3.2% (above new artist average of 2.5%)
+- Total Posts: 17 (good consistency)
+
+What's Working FOR YOU:
+1. Behind-the-scenes studio content: 4.1% engagement vs. 1.8% for promotional posts
+   → Make this 50% of your content
+   
+2. Tuesday/Thursday 2-4pm: Your sweet spot for posting
+   → Best engagement by 40% vs. other times
+   
+3. TikTok driving your Spotify growth: 12% click-through vs. Instagram's 3%
+   → Focus 60% of effort here
+   
+4. Posts showing your personality: 3.8% engagement vs. just music: 2.1%
+   → People want to know YOU, not just your music
+
+What's Not Working:
+1. Friday evening posts: Consistently underperform
+2. Lyric-only videos: Low engagement (1.6%)
+3. Over-promotional content: People tune out
+
+Your Strategic Plan (Next 30 Days):
+1. Post 4-5x per week (keep current pace)
+2. 50% BTS studio, 25% personal story, 25% music snippets
+3. Tuesday/Thursday are your power days
+4. Always show your face - it matters for you
+
+Realistic Expectations:
+At your current pace: 500 monthly listeners by Day 90
+That's EXCELLENT for a brand new artist!
+
+For comparison:
+- 25% of new artists: quit before Day 90
+- 50% of new artists: under 200 listeners at Day 90
+- You're tracking top 25%: on pace for 500+
+
+Keep going - you're building something real! 🚀
+```
+
+**Day 60 - Momentum Building:**
+```
+"Month 2 Update: You're Accelerating!
+
+Growth This Month:
+- Followers: 185 → 420 (+235, up from +185 first month!)
+- Monthly Listeners: 312 → 680 (+368, growth accelerating!)
+- Engagement: 3.2% → 3.8% (improving!)
+
+🔥 You're in acceleration phase - this is when it gets fun!
+
+New Insights:
+- Your collaboration with [similar artist] drove 140 new followers
+- Story series about writing process: 5.2% engagement (your best yet)
+- TikTok algorithm picked up your latest post: 3,200 views!
+
+Next Growth Lever:
+Time to add collaborations. Your audience overlaps 60% with these 5 artists...
+
+On Pace For:
+- 1,000 monthly listeners: Week 14 (3.5 months total)
+- 1,000 followers: Week 16 (4 months total)
+
+You're ahead of schedule! Most new artists take 6-8 months for this."
+```
+
+**Revenue Potential:**
+- Will pay $25-50/month as new artist
+- Higher churn risk early (many quit)
+- But: If they succeed, sticky and upgrade to higher tiers
+- Huge market (most artists start here)
+- Word-of-mouth potential if you help them succeed
+
+---
+
+#### Persona 4: "The Hobbyist"
+**Profile:**
+- Makes music for fun, not as career
+- Releases occasionally when inspired
+- Small following (100-1,000)
+- Inconsistent posting
+- No pressure to grow professionally
+
+**Example: Weekend musician with day job**
+
+**Pain Points:**
+- Feels guilty about not posting enough
+- Confused by all the marketing advice
+- Wants to share music without it feeling like work
+
+**Goals:**
+- Simple way to share music with small audience
+- Low time commitment
+- Help when they do release something
+- Stay motivated without pressure
+
+**What They Need:**
+- Very simple dashboard
+- Occasional encouragement
+- Basic release strategy when needed
+- No pressure or complexity
+
+**Platform Strategy:**
+- **Not a priority customer** for Jonah's business
+- Won't pay much ($10-25/month max)
+- Irregular usage, high churn
+- Build for them ONLY if Phase 1 & 2 are successful
+
+---
+
+### User Journey Comparison: The Timeline to Value
+
+| Time | The Launcher (David) | The Stalled Artist | The Growing Artist |
+|------|---------------------|-------------------|-------------------|
+| **Day 0** | Release strategy + templates | Historical analysis | Comprehensive analytics |
+| **Week 2** | Validation + encouragement | Early pattern detection | Campaign planning |
+| **Day 30** | First personalized insights | Breakthrough insights | Professional reporting |
+| **Day 90** | Growth momentum + experiments | Sustained growth | ROI optimization |
+| **Value** | Learn what works from scratch | Break through plateau | Scale and professionalize |
+
+**Key Insight:** Different users need different things at different times. That's why the phased approach makes sense - build for users who get value immediately (Phase 1), then expand to users who need different onboarding (Phase 2).
+
+---
+
+## Why This Matters for Jonah's Decision
+
+**If Jonah builds Phase 1 only (Months 1-3):**
+- Can serve Kiss Bang + other stalled/growing artists immediately
+- Portfolio strong enough to get hired
+- Proves technical execution + product thinking
+- Addressable market: thousands of artists
+
+**If he adds Phase 2 (Months 4-6):**
+- Can also serve David + all new artists
+- Much larger addressable market (most artists start at zero)
+- More compelling business case if pursuing that path
+- But not necessary to get hired or prove concept
+
+**For David as potential user:**
+- Phase 1: Can't really use it yet (no data to analyze)
+- Phase 2: Perfect timing for your release
+- Role: First Phase 2 beta tester, provide feedback
+
+**Strategic recommendation:** Build Phase 1 first, decide on Phase 2 based on results at Month 3.
+
+---
+
 ## The Opportunity: Multi-Artist Platform Starting with Real Users
 
 **Your Pilot Artists:**
@@ -1699,6 +3008,151 @@ This gives you:
 ---
 
 ## 3-Month Build Timeline
+
+### WEEK 0: Environment Setup & Getting to Hello World
+
+**Goal:** Set up your development environment and deploy a working "hello world" application so you understand the architecture before building product features.
+
+**Important:** We've created a detailed technical setup guide in `cursor_setup_instructions.md`. This section gives you the high-level overview and checklist.
+
+---
+
+#### Understanding the Architecture (5 minutes to read)
+
+Your application has **three separate pieces** that work together:
+
+```
+FRONTEND (React)              BACKEND (FastAPI)           DATABASE (PostgreSQL)
+Running on Vercel      ←→     Running on Railway     ←→   Hosted by Railway
+Your user interface           Your business logic         Your data storage
+```
+
+**Key concept:** Frontend and Backend are separate applications that communicate via HTTP API calls. This is modern web architecture.
+
+**Why this matters:**
+- You can update frontend without touching backend (and vice versa)
+- Frontend can be static files (fast, cheap to host)
+- Backend handles all sensitive operations (database, API keys, OAuth)
+- Multiple frontends (web, mobile) can use same backend
+
+---
+
+#### Week 0 Checklist
+
+**Day 1-2: Install Tools**
+- [ ] Install Python 3.11+
+- [ ] Install Node.js 18+
+- [ ] Install Cursor editor
+- [ ] Install Git
+- [ ] Create GitHub account/repository
+- [ ] Sign up for Railway (backend hosting)
+- [ ] Sign up for Vercel (frontend hosting)
+
+**Day 3-4: Backend Setup**
+- [ ] Use Cursor to scaffold FastAPI backend (see `cursor_setup_instructions.md`)
+- [ ] Run backend locally at `http://localhost:8000`
+- [ ] Test health check endpoint works
+- [ ] Deploy backend to Railway
+- [ ] Verify production backend URL works
+
+**Day 5-6: Frontend Setup**
+- [ ] Use Cursor to scaffold React frontend (see `cursor_setup_instructions.md`)
+- [ ] Run frontend locally at `http://localhost:5173`
+- [ ] Test that frontend can call backend
+- [ ] Deploy frontend to Vercel
+- [ ] Verify production frontend URL works
+
+**Day 7: Test End-to-End**
+- [ ] Push code to GitHub
+- [ ] Verify automatic deployments work (push → auto-deploy)
+- [ ] Test production: Frontend calls Backend calls Database
+- [ ] Share production URL with someone to verify it works
+
+---
+
+#### Success Criteria: Your "Hello World" Application
+
+**By end of Week 0, you should have:**
+
+**Locally (on your machine):**
+```bash
+# Terminal 1: Backend running
+cd backend
+uvicorn main:app --reload
+# → http://localhost:8000/health returns {"status": "healthy"}
+
+# Terminal 2: Frontend running
+cd frontend
+npm run dev
+# → http://localhost:5173 shows React app
+# → Dashboard displays "Backend Status: Connected ✓"
+```
+
+**In Production (live on internet):**
+- Backend: `https://your-app.railway.app/health` → Returns health status
+- Frontend: `https://your-app.vercel.app` → Shows dashboard with backend status
+- Database: PostgreSQL instance running on Railway
+- GitHub: All code pushed, automatic deployments configured
+
+**Test:** Change something locally, push to GitHub, see it auto-deploy to production within 2 minutes.
+
+---
+
+#### Where to Get Detailed Help
+
+**For step-by-step technical instructions:**
+→ See `cursor_setup_instructions.md` in this same directory
+
+**That document includes:**
+- Complete Cursor prompts to scaffold projects
+- Exact commands to run
+- Database schema setup
+- Deployment configuration
+- Environment variables
+- Troubleshooting common issues
+
+**For learning the technologies:**
+- FastAPI: https://fastapi.tiangolo.com/tutorial/
+- React: https://react.dev/learn
+- Railway: https://docs.railway.app/
+- Vercel: https://vercel.com/docs
+
+---
+
+#### Common Week 0 Questions
+
+**Q: Why do I need to deploy in Week 0? Can't I just work locally?**
+A: You want automatic deployments working BEFORE you start building features. Otherwise you'll build for 3 months and discover deployment is broken. Also, you need live URLs to test OAuth (Spotify, Instagram won't redirect to localhost).
+
+**Q: Do I need to understand everything before starting?**
+A: No. You need Week 0 working, but you'll learn more as you build. The goal is: backend talks to frontend, deployments work, you can iterate quickly.
+
+**Q: What if I get stuck on setup?**
+A: Use Cursor heavily - paste error messages and ask it to fix. Check `cursor_setup_instructions.md` for troubleshooting. Join Railway/Vercel Discord for hosting help. Don't spend more than 2 days stuck on any issue - ask for help.
+
+**Q: Can I use different hosting (not Railway/Vercel)?**
+A: Yes, but these are recommended because:
+- Railway: Auto-detects Python, includes PostgreSQL, automatic deploys
+- Vercel: Made for React, automatic deploys, free SSL, fast
+- Both have generous free tiers
+- Other options (AWS, Heroku, DigitalOcean) require more configuration
+
+---
+
+#### Week 0 Deliverable
+
+**You know you're ready for Week 1 when:**
+1. You can make a change to frontend code → push → see it live in 2 minutes
+2. You can make a change to backend code → push → see it live in 2 minutes
+3. You understand what each piece does (even if not HOW it works yet)
+4. Someone else can visit your production URL and see your app
+5. Frontend successfully calls backend API and displays result
+
+**If all those are true → Start Week 1 (Authentication + Spotify OAuth)**
+
+**If any are false → Fix them first** using `cursor_setup_instructions.md` or ask for help. Don't start building features on broken infrastructure.
+
+---
 
 ### MONTH 1: Foundation - Multi-Tenant Architecture + Data Pipeline
 *Goal: Build a platform that can handle multiple artists, not just one*
