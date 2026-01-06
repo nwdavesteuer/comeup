@@ -9,7 +9,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 import logging
 from backend.config import settings
 from backend.database import engine, Base
-from backend.routers import auth, connections, callbacks, metrics, content, ai
+from backend.routers import auth, connections, callbacks, metrics, content, ai, onboarding, content_schedule
 from backend.jobs import sync_all_artists_data, process_publishing_queue, generate_weekly_insights
 
 # Configure logging
@@ -21,7 +21,7 @@ Base.metadata.create_all(bind=engine)
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="Fanbase Builder - Music Marketing Platform",
+    title="ComeUp - Music Marketing Platform",
     description="Multi-tenant SaaS platform for music artists to manage marketing",
     version="0.1.0"
 )
@@ -43,6 +43,8 @@ app.add_middleware(
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
+app.include_router(onboarding.router, prefix="/api/onboarding", tags=["onboarding"])
+app.include_router(content_schedule.router, prefix="/api/schedule", tags=["content-schedule"])
 app.include_router(connections.router, prefix="/api/connect", tags=["connections"])
 app.include_router(callbacks.router, prefix="/api/callback", tags=["callbacks"])
 app.include_router(connections.router, prefix="/api/connections", tags=["connections"])
@@ -85,7 +87,7 @@ logger.info("Background scheduler started")
 @app.get("/")
 async def root():
     return {
-        "message": "Fanbase Builder API",
+        "message": "ComeUp API",
         "version": "0.1.0",
         "status": "running"
     }

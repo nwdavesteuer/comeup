@@ -6,6 +6,7 @@ from backend.models.metric import DailyMetric
 from backend.models.content import ContentPost, ContentPerformance
 from backend.models.prediction import Prediction
 from backend.models.experiment import Experiment
+from backend.models.onboarding import OnboardingResponse
 
 __all__ = [
     "User",
@@ -16,5 +17,6 @@ __all__ = [
     "ContentPerformance",
     "Prediction",
     "Experiment",
+    "OnboardingResponse",
 ]
 

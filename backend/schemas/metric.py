@@ -2,7 +2,7 @@
 Metrics schemas
 """
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Any
 from datetime import date, datetime
 from uuid import UUID
 
@@ -34,5 +34,5 @@ class MetricsOverviewResponse(BaseModel):
 class PlatformMetricsResponse(BaseModel):
     platform: str
     metrics: list[DailyMetricResponse]
-    summary: dict[str, any] = {}
+    summary: dict[str, Any] = {}
 

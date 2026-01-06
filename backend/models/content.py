@@ -2,17 +2,16 @@
 Content models - posts and their performance tracking
 """
 from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Integer, Numeric, func, Index
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
-from backend.database import Base
+from backend.database import Base, GUID
 
 
 class ContentPost(Base):
     __tablename__ = "content_posts"
 
-    post_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    artist_id = Column(UUID(as_uuid=True), ForeignKey("artists.artist_id"), nullable=False, index=True)
+    post_id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    artist_id = Column(GUID(), ForeignKey("artists.artist_id"), nullable=False, index=True)
     platform = Column(String(50), nullable=False)  # 'spotify', 'instagram', 'tiktok', 'youtube'
     content_type = Column(String(50), nullable=False)  # 'reel', 'story', 'tiktok', 'youtube_short', 'post'
     caption = Column(Text, nullable=True)
@@ -36,9 +35,9 @@ class ContentPost(Base):
 class ContentPerformance(Base):
     __tablename__ = "content_performance"
 
-    performance_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    post_id = Column(UUID(as_uuid=True), ForeignKey("content_posts.post_id"), nullable=False, index=True)
-    artist_id = Column(UUID(as_uuid=True), ForeignKey("artists.artist_id"), nullable=False, index=True)
+    performance_id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    post_id = Column(GUID(), ForeignKey("content_posts.post_id"), nullable=False, index=True)
+    artist_id = Column(GUID(), ForeignKey("artists.artist_id"), nullable=False, index=True)
     measured_at = Column(DateTime(timezone=True), nullable=False)
     likes = Column(Integer, default=0)
     comments = Column(Integer, default=0)

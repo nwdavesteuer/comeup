@@ -2,17 +2,16 @@
 Platform connection model - stores OAuth tokens for each platform
 """
 from sqlalchemy import Column, String, DateTime, Boolean, ForeignKey, func, Index
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
-from backend.database import Base
+from backend.database import Base, GUID
 
 
 class PlatformConnection(Base):
     __tablename__ = "platform_connections"
 
-    connection_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    artist_id = Column(UUID(as_uuid=True), ForeignKey("artists.artist_id"), nullable=False, index=True)
+    connection_id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    artist_id = Column(GUID(), ForeignKey("artists.artist_id"), nullable=False, index=True)
     platform = Column(String(50), nullable=False)  # 'spotify', 'instagram', 'tiktok', 'youtube'
     access_token = Column(String, nullable=True)  # encrypted
     refresh_token = Column(String, nullable=True)  # encrypted

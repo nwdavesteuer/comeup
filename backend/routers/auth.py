@@ -1,7 +1,7 @@
 """
 Authentication routes
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Form
 from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.schemas.auth import UserSignup, UserLogin, Token, UserResponse
@@ -20,8 +20,14 @@ async def signup(user_data: UserSignup, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=Token)
-async def login(login_data: UserLogin, db: Session = Depends(get_db)):
+async def login(
+    username: str = Form(...),  # OAuth2 standard uses 'username' for email
+    password: str = Form(...),
+    db: Session = Depends(get_db)
+):
     """Authenticate user and get access token"""
+    # Create UserLogin object from form data
+    login_data = UserLogin(email=username, password=password)
     access_token = AuthService.login(db, login_data)
     return {"access_token": access_token, "token_type": "bearer"}
 

@@ -2,17 +2,16 @@
 Artist model - represents a music artist account
 """
 from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, func
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
-from backend.database import Base
+from backend.database import Base, GUID
 
 
 class Artist(Base):
     __tablename__ = "artists"
 
-    artist_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False, index=True)
+    artist_id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    user_id = Column(GUID(), ForeignKey("users.user_id"), nullable=False, index=True)
     artist_name = Column(String(255), nullable=False)
     genre = Column(String(100), nullable=True)
     subscription_tier = Column(String(50), default="free")  # 'free', 'pro', 'premium'
@@ -26,4 +25,5 @@ class Artist(Base):
     content_posts = relationship("ContentPost", back_populates="artist", cascade="all, delete-orphan")
     experiments = relationship("Experiment", back_populates="artist", cascade="all, delete-orphan")
     predictions = relationship("Prediction", back_populates="artist", cascade="all, delete-orphan")
+    onboarding_response = relationship("OnboardingResponse", back_populates="artist", uselist=False, cascade="all, delete-orphan")
 
