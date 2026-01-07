@@ -65,65 +65,134 @@ const SchedulePreview = () => {
     )
   }
 
-  // Group schedule by day
-  const scheduleByDay = {}
+  // Group schedule by date and activity type
+  const scheduleByDate = {}
   schedule.forEach(item => {
-    if (!scheduleByDay[item.day]) {
-      scheduleByDay[item.day] = []
+    const date = item.date
+    if (!scheduleByDate[date]) {
+      scheduleByDate[date] = { filming: [], editing: [], posting: [] }
     }
-    scheduleByDay[item.day].push(item)
+    if (item.activity_type === 'filming') {
+      scheduleByDate[date].filming.push(item)
+    } else if (item.activity_type === 'editing') {
+      scheduleByDate[date].editing.push(item)
+    } else if (item.activity_type === 'posting') {
+      scheduleByDate[date].posting.push(item)
+    }
   })
+
+  // Sort dates
+  const sortedDates = Object.keys(scheduleByDate).sort()
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  }
 
   return (
     <div className="schedule-preview-container">
       <div className="schedule-card">
         <h1>Your Content Schedule</h1>
-        <p className="subtitle">Here's your personalized content plan for this week</p>
-
-        {summary && (
-          <div className="schedule-summary">
-            <h3>Summary</h3>
-            <div className="summary-stats">
-              <div className="stat">
-                <span className="stat-value">{summary.total_posts}</span>
-                <span className="stat-label">Total Posts</span>
-              </div>
-              <div className="stat">
-                <span className="stat-value">{summary.estimated_total_time}</span>
-                <span className="stat-label">Estimated Time</span>
-              </div>
-            </div>
-            {summary.posts_by_platform && (
-              <div className="platform-breakdown">
-                <strong>By Platform:</strong>
-                {Object.entries(summary.posts_by_platform).map(([platform, count]) => (
-                  <span key={platform} className="platform-tag">
-                    {platform}: {count}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+        <p className="subtitle">Here's your personalized content plan with detailed instructions</p>
 
         <div className="schedule-content">
-          <h3>This Week's Schedule</h3>
-          {Object.entries(scheduleByDay).map(([day, items]) => (
-            <div key={day} className="schedule-day">
-              <h4>{day}</h4>
-              {items.map((item, idx) => (
-                <div key={idx} className="schedule-item">
-                  <div className="item-header">
-                    <span className="platform-badge">{item.platform}</span>
-                    <span className="content-type-badge">{item.content_type}</span>
-                    <span className="time-badge">{item.time_suggestion}</span>
+          {sortedDates.map((date) => {
+            const daySchedule = scheduleByDate[date]
+            const hasContent = daySchedule.filming.length > 0 || daySchedule.editing.length > 0 || daySchedule.posting.length > 0
+            
+            if (!hasContent) return null
+
+            return (
+              <div key={date} className="schedule-day">
+                <h4>{formatDate(date)}</h4>
+                
+                {/* Filming Activities */}
+                {daySchedule.filming.map((item, idx) => (
+                  <div key={`filming-${idx}`} className="schedule-item filming">
+                    <div className="item-header">
+                      <span className="activity-badge filming">📹 Filming</span>
+                      <span className="platform-badge">{item.platform}</span>
+                      <span className="format-badge">{item.format}</span>
+                    </div>
+                    <h5 className="content-name">{item.content_name}</h5>
+                    
+                    {item.visual_direction && (
+                      <div className="visual-direction">
+                        <strong>Visual Direction:</strong>
+                        <p><strong>Color Palette:</strong> {item.visual_direction.color_palette}</p>
+                        <p><strong>Style:</strong> {item.visual_direction.style_description}</p>
+                      </div>
+                    )}
+                    
+                    {item.content_description && (
+                      <div className="content-description">
+                        <strong>Content Description:</strong>
+                        <p>{item.content_description}</p>
+                      </div>
+                    )}
+                    
+                    {item.shot_list && item.shot_list.length > 0 && (
+                      <div className="shot-list">
+                        <strong>Shot List:</strong>
+                        <ul>
+                          {item.shot_list.map((shot, shotIdx) => (
+                            <li key={shotIdx}>
+                              <strong>{shot.shot}</strong> ({shot.time_range}): {shot.description}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    
+                    <div className="time-info">
+                      <p><strong>Setup Time:</strong> {item.setup_time}</p>
+                      <p><strong>Filming Duration:</strong> {item.filming_duration}</p>
+                    </div>
                   </div>
-                  <p className="item-idea">{item.idea}</p>
-                  <p className="item-time">⏱️ {item.estimated_time}</p>
-                </div>
-              ))}
-            </div>
-          ))}
+                ))}
+
+                {/* Editing Activities */}
+                {daySchedule.editing.map((item, idx) => (
+                  <div key={`editing-${idx}`} className="schedule-item editing">
+                    <div className="item-header">
+                      <span className="activity-badge editing">✂️ Editing</span>
+                      <span className="platform-badge">{item.platform}</span>
+                      <span className="format-badge">{item.format}</span>
+                    </div>
+                    <h5 className="content-name">{item.content_name}</h5>
+                    <p><strong>Editing Duration:</strong> {item.editing_duration}</p>
+                  </div>
+                ))}
+
+                {/* Posting Activities */}
+                {daySchedule.posting.map((item, idx) => (
+                  <div key={`posting-${idx}`} className="schedule-item posting">
+                    <div className="item-header">
+                      <span className="activity-badge posting">📤 Posting</span>
+                      <span className="platform-badge">{item.platform}</span>
+                      <span className="format-badge">{item.format}</span>
+                    </div>
+                    <h5 className="content-name">{item.content_name}</h5>
+                    <p><strong>Posting Time:</strong> {item.posting_time}</p>
+                    
+                    {item.caption && (
+                      <div className="caption">
+                        <strong>Caption:</strong>
+                        <p>{item.caption}</p>
+                      </div>
+                    )}
+                    
+                    {item.hashtags && item.hashtags.length > 0 && (
+                      <div className="hashtags">
+                        <strong>Hashtags:</strong>
+                        <p>{item.hashtags.map(tag => `#${tag}`).join(' ')}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )
+          })}
         </div>
 
         <div className="schedule-actions">

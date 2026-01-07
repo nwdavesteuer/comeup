@@ -39,13 +39,11 @@ class OnboardingResponse(Base):
     # Question 8: Upcoming music
     upcoming_music = Column(String(50), nullable=True)  # 'soon', 'unreleased', 'working', 'existing', 'not_yet'
     release_timeline = Column(String(50), nullable=True)  # 'within_month', '1_3_months', '3_6_months', '6_plus_months', 'flexible'
-    specific_release_date = Column(DateTime(timezone=True), nullable=True)  # If they provided exact date
+    specific_release_date = Column(DateTime(timezone=True), nullable=True)  # Release date for upcoming music
+    song_name = Column(String(200), nullable=True)  # Name of the song if they have a specific release date
     
     # Question 9: Collaborations
     collaboration_plans = Column(String(50), nullable=True)  # 'coming_up', 'open', 'maybe', 'no'
-    
-    # Question 10: Upcoming content
-    upcoming_content = Column(Text, nullable=True)  # Free text about content they plan to post soon
     
     # Metadata
     current_question = Column(String(50), nullable=True)  # Track progress: 'content_time', 'live_performances', etc.

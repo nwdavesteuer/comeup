@@ -7,7 +7,6 @@ from typing import Optional
 from backend.database import get_db
 from backend.models.artist import Artist
 from backend.models.onboarding import OnboardingResponse
-from backend.models.connection import PlatformConnection
 from backend.schemas.onboarding import (
     OnboardingAnswerRequest,
     OnboardingStatusResponse,
@@ -29,8 +28,9 @@ QUESTION_ORDER = [
     "challenges",
     "whats_working",
     "upcoming_music",
-    "collaborations",
-    "upcoming_content"
+    "release_date",
+    "song_name",
+    "collaborations"
 ]
 
 
@@ -68,9 +68,15 @@ def calculate_progress(onboarding: OnboardingResponse) -> int:
         progress += 1
     if onboarding.upcoming_music:
         progress += 1
+    # Release date/timeline - only count if they have upcoming music that needs it
+    if onboarding.upcoming_music in ['soon', 'unreleased']:
+        if onboarding.specific_release_date or onboarding.release_timeline:
+            progress += 1
+            # If they have a date, song_name is also required
+            if onboarding.specific_release_date:
+                if onboarding.song_name:
+                    progress += 1
     if onboarding.collaboration_plans:
-        progress += 1
-    if onboarding.upcoming_content:
         progress += 1
     return progress
 
@@ -93,10 +99,19 @@ def get_next_question(onboarding: OnboardingResponse) -> Optional[str]:
         return "whats_working"
     if not onboarding.upcoming_music:
         return "upcoming_music"
+    # If they have upcoming music (soon/unreleased), check for release date first
+    if onboarding.upcoming_music in ['soon', 'unreleased']:
+        # First check if they have a date
+        if not onboarding.specific_release_date:
+            # If no date, check if they have timeline (they skipped date and provided timeline)
+            if not onboarding.release_timeline:
+                return "release_date"
+        else:
+            # They have a date, check if they provided song name
+            if not onboarding.song_name:
+                return "song_name"
     if not onboarding.collaboration_plans:
         return "collaborations"
-    if not onboarding.upcoming_content:
-        return "upcoming_content"
     return None
 
 
@@ -110,11 +125,21 @@ async def get_onboarding_status(
     progress = calculate_progress(onboarding)
     next_question = get_next_question(onboarding)
     
+    # Calculate total questions based on their answers
+    # Base questions: 8 (content_time through whats_working, upcoming_music, collaborations)
+    total_questions = 8
+    # If they have upcoming music (soon/unreleased), add release date/timeline question
+    if onboarding.upcoming_music in ['soon', 'unreleased']:
+        total_questions += 1
+        # If they have a specific date, add song_name question
+        if onboarding.specific_release_date:
+            total_questions += 1
+    
     return OnboardingStatusResponse(
         is_complete=onboarding.is_complete,
         current_question=next_question,
         progress=progress,
-        total_questions=10
+        total_questions=total_questions
     )
 
 
@@ -159,10 +184,28 @@ async def save_onboarding_answer(
                 onboarding.specific_release_date = datetime.fromisoformat(answer["specific_date"])
         else:
             onboarding.upcoming_music = str(answer)
+    elif question_key == "release_date":
+        if answer is None or answer == "":
+            # User skipped - show timeline question instead
+            onboarding.specific_release_date = None
+        elif isinstance(answer, str):
+            # Parse date string (YYYY-MM-DD format)
+            try:
+                onboarding.specific_release_date = datetime.fromisoformat(answer)
+            except ValueError:
+                # If parsing fails, try with time component
+                onboarding.specific_release_date = datetime.fromisoformat(answer + "T00:00:00")
+        elif isinstance(answer, dict):
+            if "date" in answer:
+                onboarding.specific_release_date = datetime.fromisoformat(answer["date"])
+            elif "timeline" in answer:
+                # They provided timeline instead of date
+                onboarding.release_timeline = answer["timeline"]
+                onboarding.specific_release_date = None
+    elif question_key == "song_name":
+        onboarding.song_name = str(answer) if answer else None
     elif question_key == "collaborations":
         onboarding.collaboration_plans = str(answer) if isinstance(answer, str) else answer
-    elif question_key == "upcoming_content":
-        onboarding.upcoming_content = str(answer) if isinstance(answer, str) else answer
     
     # Update current question
     onboarding.current_question = get_next_question(onboarding)
@@ -182,39 +225,22 @@ async def complete_onboarding(
     """Mark onboarding as complete"""
     onboarding = get_or_create_onboarding(db, artist.artist_id)
     
-    # Verify all questions are answered
-    progress = calculate_progress(onboarding)
-    if progress < 10:
+    # Check if there are any remaining questions
+    next_question = get_next_question(onboarding)
+    if next_question:
+        # Calculate expected total
+        total_questions = 8
+        if onboarding.upcoming_music in ['soon', 'unreleased']:
+            total_questions += 1
+            if onboarding.specific_release_date:
+                total_questions += 1
+        progress = calculate_progress(onboarding)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Onboarding incomplete. {progress}/10 questions answered."
+            detail=f"Onboarding incomplete. Please answer all questions first."
         )
     
-    # Check for required platform connections
-    spotify_connection = db.query(PlatformConnection).filter(
-        PlatformConnection.artist_id == artist.artist_id,
-        PlatformConnection.platform == "spotify",
-        PlatformConnection.is_active == True
-    ).first()
-    
-    instagram_connection = db.query(PlatformConnection).filter(
-        PlatformConnection.artist_id == artist.artist_id,
-        PlatformConnection.platform == "instagram",
-        PlatformConnection.is_active == True
-    ).first()
-    
-    if not spotify_connection:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Spotify account must be connected to complete onboarding. Please connect your Spotify account first."
-        )
-    
-    if not instagram_connection:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Instagram account must be connected to complete onboarding. Please connect your Instagram account first."
-        )
-    
+    # Platform connections are optional - no validation needed
     onboarding.is_complete = True
     artist.onboarding_complete = True
     onboarding.current_question = None

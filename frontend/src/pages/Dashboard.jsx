@@ -93,9 +93,6 @@ const Dashboard = () => {
     return connections.some(conn => conn.platform === platform && conn.is_active)
   }
 
-  const hasRequiredConnections = () => {
-    return isConnected('spotify') && isConnected('instagram')
-  }
 
   if (loading || !onboardingComplete) {
     return <div className="dashboard-container">Loading...</div>
@@ -125,28 +122,21 @@ const Dashboard = () => {
         )}
         <div className="dashboard-card">
           <h2>Welcome to ComeUp!</h2>
-          {!hasRequiredConnections() && (
-            <div style={{ backgroundColor: '#fff3cd', border: '1px solid #ffc107', padding: '12px', borderRadius: '4px', marginBottom: '16px' }}>
-              <p style={{ color: '#856404', margin: 0, fontWeight: 'bold' }}>
-                ⚠️ Required: Please connect both Spotify and Instagram accounts to continue.
-              </p>
-            </div>
-          )}
-          <p>Connect your accounts to get personalized content recommendations and insights:</p>
+          <p>Your content schedule is ready! Connect your accounts (optional) to get even more personalized recommendations:</p>
           <div className="connection-buttons">
             <button 
               className={`btn-primary ${isConnected('spotify') ? 'connected' : ''}`}
               onClick={() => handleConnect('spotify')}
               disabled={isConnected('spotify')}
             >
-              {isConnected('spotify') ? '✓ Spotify Connected' : 'Connect Spotify (Required)'}
+              {isConnected('spotify') ? '✓ Spotify Connected' : 'Connect Spotify (Optional)'}
             </button>
             <button 
               className={`btn-primary ${isConnected('instagram') ? 'connected' : ''}`}
               onClick={() => handleConnect('instagram')}
               disabled={isConnected('instagram')}
             >
-              {isConnected('instagram') ? '✓ Instagram Connected' : 'Connect Instagram (Required)'}
+              {isConnected('instagram') ? '✓ Instagram Connected' : 'Connect Instagram (Optional)'}
             </button>
           </div>
           {connections.length > 0 && (
@@ -154,11 +144,9 @@ const Dashboard = () => {
               Connected: {connections.map(c => c.platform).join(', ')}
             </p>
           )}
-          {hasRequiredConnections() && (
-            <p style={{ marginTop: '16px', color: '#28a745', fontSize: '14px', fontWeight: 'bold' }}>
-              ✓ All required accounts connected! You can now access your content schedule.
-            </p>
-          )}
+          <p style={{ marginTop: '16px', color: '#999', fontSize: '13px', fontStyle: 'italic' }}>
+            Note: Your content schedule works great without connections! Connecting accounts helps us provide more personalized insights based on your actual performance data.
+          </p>
         </div>
 
         {schedule && schedule.schedule && schedule.schedule.length > 0 && (

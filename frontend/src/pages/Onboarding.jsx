@@ -6,6 +6,7 @@ import './Onboarding.css'
 const Onboarding = () => {
   const [currentQuestion, setCurrentQuestion] = useState(null)
   const [progress, setProgress] = useState(0)
+  const [totalQuestions, setTotalQuestions] = useState(10)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [answer, setAnswer] = useState(null)
@@ -19,9 +20,10 @@ const Onboarding = () => {
     try {
       const response = await api.get('/api/onboarding/status')
       setProgress(response.data.progress)
+      setTotalQuestions(response.data.total_questions || 10)
       setCurrentQuestion(response.data.current_question)
       if (response.data.is_complete) {
-        navigate('/dashboard')
+        navigate('/schedule-preview')
       }
     } catch (error) {
       console.error('Failed to fetch onboarding status:', error)
@@ -68,7 +70,8 @@ const Onboarding = () => {
       await api.post('/api/onboarding/complete')
       navigate('/schedule-preview')
     } catch (error) {
-      alert('Failed to complete onboarding. Please try again.')
+      const errorMessage = error.response?.data?.detail || error.message || 'Failed to complete onboarding. Please try again.'
+      alert(errorMessage)
     }
   }
 
@@ -194,6 +197,18 @@ const Onboarding = () => {
         onAnswer={handleAnswer}
       />
     ),
+    release_date: (
+      <ReleaseDateQuestion
+        answer={answer}
+        onAnswer={handleAnswer}
+      />
+    ),
+    song_name: (
+      <SongNameQuestion
+        answer={answer}
+        onAnswer={handleAnswer}
+      />
+    ),
     collaborations: (
       <Question
         title="Collaborations"
@@ -205,12 +220,6 @@ const Onboarding = () => {
           { value: 'maybe', label: 'Not sure / Maybe in the future' },
           { value: 'no', label: 'No, I prefer to release solo music' },
         ]}
-        answer={answer}
-        onAnswer={handleAnswer}
-      />
-    ),
-    upcoming_content: (
-      <UpcomingContentQuestion
         answer={answer}
         onAnswer={handleAnswer}
       />
@@ -239,7 +248,7 @@ const Onboarding = () => {
         <div className="progress-bar">
           <div className="progress-fill" style={{ width: `${(progress / 10) * 100}%` }}></div>
         </div>
-        <p className="progress-text">Question {progress + 1} of 10</p>
+        <p className="progress-text">Question {progress + 1} of {totalQuestions}</p>
         
         {questionComponent}
 
@@ -450,18 +459,51 @@ const VisualStyleQuestion = ({ answer, onAnswer }) => {
   )
 }
 
-// Upcoming music question with timeline follow-up
+// Upcoming music question - now just asks the type, date comes next
 const UpcomingMusicQuestion = ({ answer, onAnswer }) => {
-  const [showTimeline, setShowTimeline] = useState(false)
-  const [musicType, setMusicType] = useState(null)
-
   const musicOptions = [
-    { value: 'soon', label: "Yes, I have a single/EP/album coming out soon (I'll tell you when)" },
+    { value: 'soon', label: "Yes, I have a single/EP/album coming out soon" },
     { value: 'unreleased', label: 'Yes, I have unreleased music I want to build hype for' },
     { value: 'working', label: "I'm working on new music but don't have release dates yet" },
     { value: 'existing', label: 'I have existing music I want to promote' },
     { value: 'not_yet', label: "Not yet / I'm still creating" },
   ]
+
+  const handleMusicSelect = (value) => {
+    onAnswer({ type: value })
+  }
+
+  return (
+    <div className="question">
+      <h2>Upcoming Music</h2>
+      <p className="description">Do you have any upcoming releases or music you want to promote in the next few months?</p>
+      <p className="note">Planning content around releases can boost streams. If you have upcoming music, I'll help create a content calendar that builds anticipation and drives listeners to Spotify.</p>
+      <div className="options">
+        {musicOptions.map((option) => (
+          <button
+            key={option.value}
+            onClick={() => handleMusicSelect(option.value)}
+            className={`option ${answer?.type === option.value ? 'selected' : ''}`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Release date question - shows date picker first, then timeline if skipped
+const ReleaseDateQuestion = ({ answer, onAnswer }) => {
+  // Check if answer is already a date string or has timeline
+  const isDateString = typeof answer === 'string' && answer.length > 0 && !answer.includes('timeline')
+  const hasTimeline = answer && typeof answer === 'object' && answer.timeline
+  
+  const [date, setDate] = useState(isDateString ? answer : '')
+  const [showTimeline, setShowTimeline] = useState(hasTimeline || false)
+
+  // Get today's date in YYYY-MM-DD format for min attribute
+  const today = new Date().toISOString().split('T')[0]
 
   const timelineOptions = [
     { value: 'within_month', label: 'Within the next month' },
@@ -471,20 +513,23 @@ const UpcomingMusicQuestion = ({ answer, onAnswer }) => {
     { value: 'flexible', label: "I'm not sure yet / flexible timeline" },
   ]
 
-  const handleMusicSelect = (value) => {
-    setMusicType(value)
-    if (value === 'soon' || value === 'unreleased') {
-      setShowTimeline(true)
+  const handleDateSubmit = () => {
+    if (date) {
+      onAnswer(date)
     } else {
-      onAnswer({ type: value })
+      setShowTimeline(true)
     }
   }
 
-  const handleTimelineSelect = (timeline) => {
-    onAnswer({ type: musicType, timeline })
+  const handleSkip = () => {
+    setShowTimeline(true)
   }
 
-  if (showTimeline) {
+  const handleTimelineSelect = (timeline) => {
+    onAnswer({ timeline })
+  }
+
+  if (showTimeline || hasTimeline) {
     return (
       <div className="question">
         <h2>Release Timeline</h2>
@@ -509,49 +554,65 @@ const UpcomingMusicQuestion = ({ answer, onAnswer }) => {
 
   return (
     <div className="question">
-      <h2>Upcoming Music</h2>
-      <p className="description">Do you have any upcoming releases or music you want to promote in the next few months?</p>
-      <p className="note">Planning content around releases can boost streams. If you have upcoming music, I'll help create a content calendar that builds anticipation and drives listeners to Spotify.</p>
-      <div className="options">
-        {musicOptions.map((option) => (
-          <button
-            key={option.value}
-            onClick={() => handleMusicSelect(option.value)}
-            className={`option ${answer?.type === option.value ? 'selected' : ''}`}
-          >
-            {option.label}
-          </button>
-        ))}
+      <h2>Release Date</h2>
+      <p className="description">
+        When is your next release coming out? This helps me plan your content schedule and build anticipation leading up to the release.
+      </p>
+      <p className="note">If you don't have a specific date yet, click "I don't have a date yet" to provide a timeline instead.</p>
+      <input
+        type="date"
+        value={date}
+        onChange={(e) => {
+          setDate(e.target.value)
+        }}
+        min={today}
+        className="text-input"
+        style={{ padding: '12px', fontSize: '16px', marginBottom: '12px' }}
+      />
+      <div style={{ display: 'flex', gap: '12px' }}>
+        <button
+          onClick={handleDateSubmit}
+          className="btn-primary"
+          disabled={!date}
+        >
+          Continue
+        </button>
+        <button
+          onClick={handleSkip}
+          className="btn-secondary"
+        >
+          I don't have a date yet
+        </button>
       </div>
     </div>
   )
 }
 
-// Upcoming content question (text input)
-const UpcomingContentQuestion = ({ answer, onAnswer }) => {
-  const [text, setText] = useState(answer || '')
+// Song name question - shown after they provide a specific release date
+const SongNameQuestion = ({ answer, onAnswer }) => {
+  const [songName, setSongName] = useState(answer || '')
 
   return (
     <div className="question">
-      <h2>Upcoming Content</h2>
+      <h2>Song Name</h2>
       <p className="description">
-        Do you have any content you plan on posting soon? (e.g., "I have a music video coming out next week" or "I'm planning to post behind-the-scenes from my recording session")
+        What's the name of your upcoming release? I'll reference it in your content schedule.
       </p>
-      <p className="note">This helps me prioritize and schedule your content more effectively.</p>
-      <textarea
-        value={text}
+      <input
+        type="text"
+        value={songName}
         onChange={(e) => {
-          setText(e.target.value)
+          setSongName(e.target.value)
           onAnswer(e.target.value)
         }}
-        placeholder="Tell me about any upcoming content you have planned..."
+        placeholder="e.g., Summer Rain, Midnight Drive, etc."
         className="text-input"
-        rows={4}
-        style={{ resize: 'vertical', minHeight: '100px' }}
+        style={{ padding: '12px', fontSize: '16px' }}
       />
     </div>
   )
 }
+
 
 export default Onboarding
 
